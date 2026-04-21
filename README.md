@@ -51,10 +51,45 @@ python examples/python/hello.py
 
 ```bash
 # TypeScript / Node.js
-npm install podflare
+cd examples/typescript && npm install
 export PODFLARE_API_KEY=pf_live_...
-npx tsx examples/typescript/hello.ts
+npm run hello
 ```
+
+## The "wow" demo — `code-interpreter`
+
+If you want one demo that captures what makes Podflare interesting,
+run this. It's the ChatGPT "Advanced Data Analysis" loop in ~130 lines
+of code that you own end-to-end:
+
+```bash
+# Python
+pip install podflare openai
+export PODFLARE_API_KEY=pf_live_... OPENAI_API_KEY=sk-...
+python examples/python/code-interpreter.py
+```
+
+```bash
+# TypeScript
+cd examples/typescript && npm install
+export PODFLARE_API_KEY=pf_live_... OPENAI_API_KEY=sk-...
+npm run code-interpreter
+```
+
+You get an interactive REPL where the AI can run real Python in a
+private Linux sandbox to answer your questions. The sandbox state
+**persists across turns** — variables, downloaded data, plots — so you
+can build up a conversation across many tool calls. Try things like:
+
+```
+> Plot a sine wave from 0 to 2π and save it as sine.png
+> Now save it base64-encoded to clipboard.txt
+> Download the latest BTC price from coingecko and tell me trend
+> How many primes are there below 10,000?
+```
+
+Every code block the AI runs is shown to you before execution — no
+black-box "advanced data analysis" hiding what's happening.
 
 ## Reproducing the benchmarks
 

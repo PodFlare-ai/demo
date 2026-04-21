@@ -1,0 +1,20 @@
+{
+  "name": "@podflare/demo-typescript",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript demos for Podflare — drop-in code interpreter, tool calling, more.",
+  "scripts": {
+    "hello": "tsx hello.ts",
+    "code-interpreter": "tsx code-interpreter.ts"
+  },
+  "dependencies": {
+    "podflare": "^0.0.16",
+    "openai": "^4.76.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0"
+  }
+}
