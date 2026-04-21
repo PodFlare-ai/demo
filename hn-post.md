@@ -53,26 +53,28 @@ delta. The *ranking* is what's stable.
 
 ## The results
 
-30 iterations, full distribution, milliseconds:
+30 iterations, full distribution, milliseconds. One representative run
+(I ran this three times across an hour — see "run-to-run variance"
+below):
 
 ```
                  min   p50   p95   p99   max   mean   p95-p50
-  Podflare       235   280   348  2000  2669    361       68
-  E2B            410   468   760   903   927    513      292
-  Daytona        444   703  1042  1184  1240    706      339
+  Podflare       245   280   380  1741  2290    357      100
+  E2B            412   470   809   879   906    527      339
+  Daytona        457   777  1183  1350  1418    793      406
 ```
 
 A few things jump out:
 
 1. **No one platform wins every percentile.** Podflare takes p50 and p95
-   (1.7× and 2.2× faster than the next best). E2B takes p99 and max —
-   our worst-case 2,669 ms vs their 927 ms is not close.
+   (1.7× and 2.1× faster than the next best). E2B takes p99 and max —
+   our worst-case ~2,300 ms vs their ~900 ms is not close.
 
 2. **Zero errors across 90 total iterations.** "Reliability" in the
    traditional uptime sense is identical across all three. The
    differentiator is *latency distribution*, not availability.
 
-3. **The spread tells you about tail behavior.** Podflare's 68 ms
+3. **The spread tells you about tail behavior.** Podflare's 100 ms
    between p50 and p95 is the tightest in the fast zone — the typical
    request and the 1-in-20 request are basically the same. E2B trades
    a higher median for a tighter long-tail bound. If p99 is in your
@@ -82,6 +84,24 @@ A few things jump out:
 4. **Daytona was the consistent-but-slowest** of the three. Nothing
    catastrophic — just no standout metric.
 
+### Run-to-run variance
+
+I ran this three times over an hour. The p50 rank order and the p95
+rank order are stable across runs — Podflare wins both every time,
+E2B second, Daytona third. But the **absolute p99 numbers bounce
+around a lot** at this sample size:
+
+```
+  Podflare p99:   519 → 1741 → 2000 ms   (three runs)
+  E2B      p99:   879 →  903 →  903 ms
+  Daytona  p99:  1184 → 1240 → 1350 ms
+```
+
+E2B is noticeably more tail-stable than the other two. That tracks
+with the architectural difference (below). If you want reliable p99
+numbers you'd need several hundred iterations per platform; 30 is
+enough to rank but not enough to publish a precise tail claim.
+
 ## What explains the distribution shapes
 
 We dug into our own p99 outlier because it was annoying. The cause
@@ -89,22 +109,31 @@ turned out to be interesting: **public-internet TCP SYN drops**.
 
 Every backbone drops ~0.05–0.35 % of SYN packets. Linux's default
 reaction is exponential retry at 1 s → 3 s → 7 s. A single dropped SYN
-turns into a 7-second request. With 30 iterations you'd expect to hit
-one. We did.
+turns into a 7-second request. With 30 iterations from residential
+wifi you'd expect to hit one. We did.
 
-Our SDK fix (shipped mid-bench as `podflare-0.0.17`): cap the connect
-timeout at 800 ms and let httpx retry on a fresh socket. Now a
-dropped SYN becomes ~800 ms + a sub-second retry instead of 7 s. That's
-why our p95 is 348 ms — we own the client library and can fix this.
-The p99 = 2,000 ms still visible in one of our runs is the same class
-of network event hitting us twice in a row (0.0025 % chance per
-request); we're looking at connection pre-warming as the next step.
+Our SDK fix (shipped as `podflare-0.0.17`): cap the connect timeout
+at 800 ms and let httpx retry on a fresh socket. Now a dropped SYN
+becomes ~800 ms + a sub-second retry instead of 7 s. That's why our
+p95 is 380 ms — we own the client library and can fix this.
 
-E2B's ConnectRPC over HTTP/2 apparently handles this gracefully — a
-persistent h2 connection doesn't open new TCPs per call, so SYN drops
-only matter at session start. That's a legitimate architectural
-advantage for tail-bound workloads, and it's reflected in their p99
-number.
+But the p99 still occasionally hits 1.7–2 s, and I'm pretty sure I
+know why now: each iteration of our bench creates a **fresh
+`Sandbox()` instance**, which creates a **fresh httpx client pool**.
+Between iterations the pool cools off, and on some fraction of
+iterations the next call opens a new TCP connection that catches a
+SYN drop. Two SYN drops in a row during the 0.8 s + retry window =
+~2 s. This is a bench-harness artifact — in a real agent loop you
+reuse one `Sandbox()` and the h1 keep-alive pool stays warm. Still,
+it's on our todo list to pre-warm the connection during
+`Sandbox()` construction.
+
+**E2B's ConnectRPC over HTTP/2 handles this better** — a persistent
+h2 connection doesn't open new TCPs per call, so SYN drops only
+matter at session start. That's a legitimate architectural advantage
+for tail-bound workloads, reflected in their much more stable p99
+(~880–900 ms across three runs, vs our 519 → 1,741 → 2,000 ms).
+Respect.
 
 Daytona runs Docker + Sysbox rather than Firecracker, with an in-VM
 HTTP server on port 2280. Their per-call overhead is higher but more
