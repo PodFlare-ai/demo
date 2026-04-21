@@ -44,13 +44,13 @@ DAYTONA_API_KEY=...           python benchmarks/bench-reliability.py daytona
 
 Tested from a MacBook on residential wifi in California, April 2026.
 
-## The results (SDK podflare 0.0.19, post-fix)
+## The results (SDK podflare 0.0.20, post-fix)
 
 30 iterations each, milliseconds:
 
 ```
                min   p50   p95   p99   max   mean
-  Podflare     164   153   170   236   263   173
+  Podflare     143   153   170   236   263   173
   E2B          418   467   750   852   888   509
   Daytona      439   713  1130  1136  1137   722
 ```
@@ -100,7 +100,7 @@ Empirical proof (reproduce this against any unreachable IP):
 Self-inflicted. Our bench's p99 was our own retry loop multiplying a
 single slow handshake into a triple-timeout chain.
 
-## The fix (0.0.19, shipped during the writeup)
+## The fix (0.0.19 → 0.0.20, shipped during the writeup)
 
 ```python
 timeouts = httpx.Timeout(connect=2.5, read=30.0, write=10.0, pool=5.0)
@@ -143,6 +143,10 @@ and the CF backbone to the origin is better than my ISP's route. So
 the "extra hop" was actually shorter wall clock. Counter-intuitive but
 reproducible.
 
+So we shipped 0.0.20 to default to `api.podflare.ai` instead of
+client-side timezone → direct-region. Every number above uses that
+default.
+
 ## What I didn't measure (but could)
 
 - **`fork(n)`**. Only Podflare exposes this primitive. ~80 ms
@@ -174,7 +178,8 @@ me.
 ## Links
 
 - Reproduce: [github.com/PodFlare-ai/demo](https://github.com/PodFlare-ai/demo) — the three `bench-reliability.py` invocations
-- The SDK fix that dropped our p99 8×: [podflare-ai/podflare@0.0.19](https://pypi.org/project/podflare/0.0.19/)
+- The SDK fix that dropped our p99 8×: [podflare 0.0.19](https://pypi.org/project/podflare/0.0.19/) (connect=2.5, retries=1)
+- The switch to edge-routing as default: [podflare 0.0.20](https://pypi.org/project/podflare/0.0.20/)
 - Full 3-way comparison: [docs.podflare.ai/architecture/comparison](https://docs.podflare.ai/architecture/comparison)
 
 ---
